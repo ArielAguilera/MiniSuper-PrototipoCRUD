@@ -1,0 +1,69 @@
+@startuml DiagramaClases_MinisuperElAhorro
+' Diagrama de clases del prototipo CRUD (Actividad 5)
+' Pegar en https://www.plantuml.com/plantuml para generar la imagen
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+title Minisúper El Ahorro - Prototipo CRUD de Productos (MVC + DAO)
+
+package "Models" {
+  class Producto {
+    + Id : int
+    + Codigo : string  <<unique>>
+    + Nombre : string
+    + Precio : decimal
+    + Stock : int
+  }
+}
+
+package "Data" {
+  class Conexion <<static>> {
+    + Cadena : string
+  }
+  class ProductoDAO {
+    - cadenaConexion : string
+    + Insertar(p : Producto) : void
+    + ObtenerTodos() : List<Producto>
+    + ObtenerPorId(id : int) : Producto
+    + Actualizar(p : Producto) : void
+    + Eliminar(id : int) : void
+    + ExisteCodigo(codigo : string, idActual : int) : bool
+  }
+}
+
+package "Controllers" {
+  class ProductoController {
+    - _dao : ProductoDAO
+    + Index() : IActionResult
+    + Create() : IActionResult
+    + Create(producto : Producto) : IActionResult
+    + Edit(id : int) : IActionResult
+    + Edit(producto : Producto) : IActionResult
+    + Delete(id : int) : IActionResult
+  }
+}
+
+package "Views/Producto" {
+  class "Index.cshtml" as Index <<view>>
+  class "Create.cshtml" as Create <<view>>
+  class "Edit.cshtml" as Edit <<view>>
+}
+
+database "PostgreSQL: minisuper" as BD {
+  class productos <<table>> {
+    {field} id : SERIAL <<PK>>
+    {field} codigo : VARCHAR(30) <<UNIQUE>>
+    {field} nombre : VARCHAR(100)
+    {field} precio : NUMERIC(10,2)
+    {field} stock : INT
+  }
+}
+
+ProductoController --> ProductoDAO : usa
+ProductoController ..> Producto : recibe / envía
+ProductoController ..> Index : muestra
+ProductoController ..> Create : muestra
+ProductoController ..> Edit : muestra
+ProductoDAO ..> Producto : crea / lee
+ProductoDAO ..> Conexion : obtiene cadena
+ProductoDAO --> productos : SQL (Npgsql)
+@enduml
