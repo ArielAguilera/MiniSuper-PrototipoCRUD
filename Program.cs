@@ -2,8 +2,16 @@ using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(opciones =>
+{
+    // Actividad 6:
+    var mensajes = opciones.ModelBindingMessageProvider;
+    mensajes.SetValueMustNotBeNullAccessor(_ => "Este dato es necesario para registrar el producto.");
+    mensajes.SetMissingBindRequiredValueAccessor(_ => "Este dato es necesario para registrar el producto.");
+    mensajes.SetAttemptedValueIsInvalidAccessor((valor, campo) => $"\"{valor}\" no es un número válido. Escribe solo números (ej. 7.50).");
+    mensajes.SetValueIsInvalidAccessor(_ => "Escribe solo números (ej. 7.50).");
+    mensajes.SetValueMustBeANumberAccessor(_ => "Escribe solo números (ej. 7.50).");
+});
 
 var app = builder.Build();
 
@@ -13,11 +21,11 @@ var cultura = new CultureInfo("en-US");
 CultureInfo.DefaultThreadCurrentCulture = cultura;
 CultureInfo.DefaultThreadCurrentUICulture = cultura;
 
-// Configure the HTTP request pipeline.
+// Configura la canalización de solicitudes HTTP.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    // El valor predeterminado de HSTS es de 30 días. Es posible que desees modificarlo para entornos de producción; consulta https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 

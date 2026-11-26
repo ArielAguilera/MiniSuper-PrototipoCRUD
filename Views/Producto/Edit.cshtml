@@ -36,9 +36,11 @@
                 <input asp-for="Stock" class="form-control" type="number" min="0" />
                 <span asp-validation-for="Stock" class="text-danger"></span>
             </div>
-
-            <button type="submit" class="btn btn-success">Guardar cambios</button>
-            <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+            @* Acciones abajo a la derecha, igual que en el modal *@
+            <div class="d-flex justify-content-end gap-2">
+                <a asp-action="Index" class="btn btn-secundario">Cancelar</a>
+                <button type="submit" class="btn btn-principal">Guardar cambios</button>
+            </div>
         </form>
     </div>
 </div>

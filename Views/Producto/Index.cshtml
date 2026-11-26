@@ -3,31 +3,38 @@
     ViewData["Title"] = "Productos";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Catálogo de Productos</h2>
-    <a asp-action="Create" class="btn btn-primary">+ Nuevo producto</a>
+@* Patrón de lectura natural: título arriba a la izquierda, acción principal arriba a la derecha *@
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0">Catálogo de Productos</h2>
+        <small class="text-muted">Registra y actualiza los productos que vende el minisúper</small>
+    </div>
+    @* Abre la ventana modal (Actividad 6) *@
+    <button type="button" class="btn btn-principal" data-bs-toggle="modal" data-bs-target="#modalNuevoProducto">
+        + Nuevo producto
+    </button>
 </div>
 
 @* Mensaje de confirmación que manda el controlador con TempData *@
 @if (TempData["Mensaje"] != null)
 {
-    <div class="alert alert-success">@TempData["Mensaje"]</div>
+    <div class="alerta-exito">@TempData["Mensaje"]</div>
 }
 
 @if (Model.Count == 0)
 {
-    <div class="alert alert-info">Todavía no hay productos registrados.</div>
+    <div class="alerta-exito">Todavía no hay productos. Presiona "+ Nuevo producto" para registrar el primero.</div>
 }
 else
 {
-    <table class="table table-striped table-bordered">
-        <thead class="table-dark">
+    <table class="table table-bordered align-middle tabla-productos">
+        <thead>
             <tr>
                 <th>Código</th>
-                <th>Nombre</th>
+                <th>Producto</th>
                 <th class="text-end">Precio (Bs.)</th>
                 <th class="text-end">Stock</th>
-                <th>Acciones</th>
+                <th class="text-center">Acciones</th>
             </tr>
         </thead>
         <tbody>
@@ -38,17 +45,260 @@ else
                     <td>@p.Nombre</td>
                     <td class="text-end">@p.Precio.ToString("N2")</td>
                     <td class="text-end">@p.Stock</td>
-                    <td>
-                        <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-warning">Editar</a>
+                    <td class="text-center">
+                        <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-secundario">Editar</a>
 
-                        @* Formulario POST para eliminar, con confirmación en JavaScript *@
+                        @* Formulario POST para eliminar, con confirmación antes de una acción crítica *@
                         <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline"
-                              onsubmit="return confirm('¿Seguro que desea eliminar @p.Nombre?');">
-                            <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                              onsubmit="return confirm('¿Quitar «@p.Nombre» del catálogo? Esta acción no se puede deshacer.');">
+                            <button type="submit" class="btn btn-sm btn-peligro">Eliminar</button>
                         </form>
                     </td>
                 </tr>
             }
         </tbody>
     </table>
+}
+
+@* =====================================================================
+   ACTIVIDAD 6: Ventana de diálogo modal "Nuevo Producto"
+   - data-bs-backdrop="static" y data-bs-keyboard="false": Bootstrap NO cierra
+     el modal solo; nosotros controlamos Esc y Cancelar para poder pedir
+     confirmación si hay datos escritos (tolerancia a errores).
+   ===================================================================== *@
+<div class="modal fade" id="modalNuevoProducto" tabindex="-1" aria-labelledby="tituloModal"
+     aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <form id="formNuevoProducto" asp-action="CrearModal" method="post" novalidate>
+                @* asp-action agrega automáticamente el token antifalsificación *@
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tituloModal">Nuevo producto</h5>
+                    <button type="button" class="btn-close" aria-label="Cerrar" id="btnCerrarX"></button>
+                </div>
+
+                <div class="modal-body">
+                    @* Mensaje general (por ejemplo, si se cae la conexión) *@
+                    <div id="errorGeneral" class="alerta-error mb-3 d-none"></div>
+
+                    <div class="mb-3">
+                        <label for="Codigo" class="form-label">Código del producto</label>
+                        <input type="text" id="Codigo" name="Codigo" class="form-control" maxlength="30"
+                               placeholder="Ej: 7771234567890" autocomplete="off" />
+                        <div class="invalid-feedback" data-error-para="Codigo"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Nombre" class="form-label">Nombre del producto</label>
+                        <input type="text" id="Nombre" name="Nombre" class="form-control" maxlength="100"
+                               placeholder="Ej: Leche PIL Entera 1L" autocomplete="off" />
+                        <div class="invalid-feedback" data-error-para="Nombre"></div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="Precio" class="form-label">Precio de venta (Bs.)</label>
+                            <input type="number" id="Precio" name="Precio" class="form-control" step="0.01" />
+                            <div class="invalid-feedback" data-error-para="Precio"></div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="Stock" class="form-label">Unidades en stock</label>
+                            <input type="number" id="Stock" name="Stock" class="form-control" step="1" />
+                            <div class="invalid-feedback" data-error-para="Stock"></div>
+                        </div>
+                    </div>
+
+                    @* Panel de confirmación: aparece si el usuario intenta salir con datos escritos *@
+                    <div id="panelConfirmar" class="confirmar-salida d-none">
+                        <p class="mb-2"><strong>Tienes datos sin guardar.</strong> Si cierras ahora se perderán. ¿Qué deseas hacer?</p>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-sm btn-peligro" id="btnDescartar">Sí, descartar</button>
+                            <button type="button" class="btn btn-sm btn-principal" id="btnSeguir">Seguir editando</button>
+                        </div>
+                    </div>
+                </div>
+
+                @* Botones de acción abajo a la derecha (patrón de lectura natural).
+                   Guardar (verde) es la acción principal; Cancelar es secundaria. *@
+                <div class="modal-footer d-flex justify-content-between">
+                    <span class="atajos">Atajos: Enter o Ctrl+S guardar · Esc cancelar</span>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-secundario" id="btnCancelar">Cancelar</button>
+                        <button type="submit" class="btn btn-principal" id="btnGuardar">Guardar</button>
+                    </div>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // ===================== Elementos del modal =====================
+    const modalElemento = document.getElementById('modalNuevoProducto');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElemento);
+    const form = document.getElementById('formNuevoProducto');
+    const panelConfirmar = document.getElementById('panelConfirmar');
+    const errorGeneral = document.getElementById('errorGeneral');
+    const btnGuardar = document.getElementById('btnGuardar');
+
+    // Valores por defecto (reducción de carga de memoria)
+    const VALORES_POR_DEFECTO = { Codigo: '', Nombre: '', Precio: '0.00', Stock: '1' };
+
+    // ===================== 1. Defaults al abrir =====================
+    modalElemento.addEventListener('show.bs.modal', function () {
+        form.Codigo.value = VALORES_POR_DEFECTO.Codigo;
+        form.Nombre.value = VALORES_POR_DEFECTO.Nombre;
+        form.Precio.value = VALORES_POR_DEFECTO.Precio;   // Precio = 0.00
+        form.Stock.value = VALORES_POR_DEFECTO.Stock;     // Stock = 1
+        limpiarErrores();
+        panelConfirmar.classList.add('d-none');
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
+    });
+
+    // Foco automático en el primer campo (Código) cuando el modal ya se ve
+    modalElemento.addEventListener('shown.bs.modal', function () {
+        form.Codigo.focus();
+    });
+
+    // ===================== 2. Atajos de teclado =====================
+    // Escuchamos en "document" con captura (true) para atrapar la tecla ANTES que
+    // Bootstrap; si no, Bootstrap hace su animación con Esc y nos quita el foco.
+    document.addEventListener('keydown', function (e) {
+        if (!modalElemento.classList.contains('show')) return;   // solo si el modal está abierto
+
+        // Esc = cancelar (con confirmación si hay datos)
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!panelConfirmar.classList.contains('d-none')) {
+                seguirEditando();          // Esc otra vez = volver al formulario (lo más seguro)
+            } else {
+                intentarCerrar();
+            }
+        }
+        // Ctrl + S = guardar (evitamos que el navegador abra "Guardar página")
+        if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault();
+            guardar();
+        }
+    }, true);
+
+    // Enter dentro de un campo envía el formulario -> lo atrapamos aquí
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        guardar();
+    });
+
+    // ===================== 3. Tolerancia a errores (confirmación) =====================
+    // ¿El usuario cambió algo respecto a los valores por defecto?
+    function hayCambios() {
+        return form.Codigo.value.trim() !== VALORES_POR_DEFECTO.Codigo ||
+               form.Nombre.value.trim() !== VALORES_POR_DEFECTO.Nombre ||
+               form.Precio.value !== VALORES_POR_DEFECTO.Precio ||
+               form.Stock.value !== VALORES_POR_DEFECTO.Stock;
+    }
+
+    function intentarCerrar() {
+        if (hayCambios()) {
+            // Hay datos escritos: preguntamos antes de perderlos
+            panelConfirmar.classList.remove('d-none');
+            document.getElementById('btnSeguir').focus();   // la opción segura queda seleccionada
+        } else {
+            modal.hide();
+        }
+    }
+
+    function seguirEditando() {
+        panelConfirmar.classList.add('d-none');
+        form.Codigo.focus();
+    }
+
+    document.getElementById('btnCancelar').addEventListener('click', intentarCerrar);
+    document.getElementById('btnCerrarX').addEventListener('click', intentarCerrar);
+    document.getElementById('btnSeguir').addEventListener('click', seguirEditando);
+    document.getElementById('btnDescartar').addEventListener('click', function () { modal.hide(); });
+
+    // ===================== 4. Mensajes constructivos =====================
+    function limpiarErrores() {
+        form.querySelectorAll('.is-invalid').forEach(c => c.classList.remove('is-invalid'));
+        form.querySelectorAll('[data-error-para]').forEach(d => d.textContent = '');
+        errorGeneral.classList.add('d-none');
+    }
+
+    // Muestra el mensaje debajo de cada campo y pone el foco en el primero con error
+    function mostrarErrores(errores) {
+        limpiarErrores();
+        let primerCampo = null;
+        for (const campo in errores) {
+            const input = form.querySelector('[name="' + campo + '"]');
+            const div = form.querySelector('[data-error-para="' + campo + '"]');
+            if (input && div) {
+                input.classList.add('is-invalid');
+                div.textContent = errores[campo];
+                if (primerCampo === null) primerCampo = input;
+            }
+        }
+        if (primerCampo) primerCampo.focus();
+    }
+
+    // Validación rápida en el navegador (el servidor vuelve a validar igual)
+    function validarEnNavegador() {
+        const errores = {};
+        const precio = parseFloat(form.Precio.value);
+        const stock = Number(form.Stock.value);
+
+        if (form.Codigo.value.trim() === '')
+            errores.Codigo = 'Escribe el código del producto (por ejemplo, el código de barras del empaque).';
+        if (form.Nombre.value.trim() === '')
+            errores.Nombre = 'Escribe el nombre del producto tal como lo verá el cajero (ej. Leche PIL 1L).';
+        if (form.Precio.value === '' || isNaN(precio) || precio <= 0)
+            errores.Precio = 'Ingresa un precio de venta mayor a Bs. 0.00 (ej. 7.50).';
+        if (form.Stock.value === '' || !Number.isInteger(stock) || stock < 0)
+            errores.Stock = 'El stock debe ser 0 o más unidades enteras. Si todavía no llegó mercadería, escribe 0.';
+
+        return errores;
+    }
+
+    // ===================== Guardar (envío al controlador) =====================
+    async function guardar() {
+        if (btnGuardar.disabled) return;           // evita doble clic / doble Ctrl+S
+        panelConfirmar.classList.add('d-none');
+
+        const errores = validarEnNavegador();
+        if (Object.keys(errores).length > 0) {
+            mostrarErrores(errores);
+            return;
+        }
+
+        btnGuardar.disabled = true;
+        btnGuardar.textContent = 'Guardando...';
+
+        try {
+            // FormData incluye el token antifalsificación del formulario
+            const respuesta = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+            if (!respuesta.ok) throw new Error('Respuesta ' + respuesta.status);
+
+            const resultado = await respuesta.json();
+            if (resultado.ok) {
+                modal.hide();
+                location.reload();                   // recarga la lista con el mensaje de éxito
+            } else {
+                mostrarErrores(resultado.errores);   // por ejemplo: código repetido
+            }
+        } catch (error) {
+            // Nunca mostramos el error técnico al usuario
+            console.error(error);
+            errorGeneral.textContent = 'No pudimos guardar el producto en este momento. Tus datos siguen aquí; inténtalo de nuevo en unos segundos.';
+            errorGeneral.classList.remove('d-none');
+        } finally {
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+        }
+    }
+</script>
 }

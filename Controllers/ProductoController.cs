@@ -44,6 +44,48 @@ namespace PrototipoCRUD.Controllers
             TempData["Mensaje"] = "Producto registrado correctamente";
             return RedirectToAction("Index");
         }
+        
+        // ACTIVIDAD 6: CREATE desde la ventana modal "Nuevo Producto"
+        // POST /Producto/CrearModal
+        // El modal envía el formulario con JavaScript (fetch) y esta acción
+        // responde en JSON. Así el modal NO se cierra si hay errores y el
+        // usuario no pierde lo que escribió.
+        
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult CrearModal(Producto producto)
+        {
+            // 1. Regla de negocio: el código no se puede repetir
+            if (!string.IsNullOrWhiteSpace(producto.Codigo) && _dao.ExisteCodigo(producto.Codigo.Trim(), 0))
+            {
+                ModelState.AddModelError("Codigo",
+                    "Este código ya pertenece a otro producto del catálogo. Verifica el código del empaque o búscalo en la lista para editarlo.");
+            }
+
+            // 2. Si hay errores, devolvemos un mensaje por cada campo (sin excepciones técnicas)
+            if (!ModelState.IsValid)
+            {
+                var errores = new Dictionary<string, string>();
+                foreach (var campo in ModelState)
+                {
+                    if (campo.Value.Errors.Count > 0)
+                    {
+                        // Tomamos solo el primer mensaje de cada campo para no saturar
+                        errores[campo.Key] = campo.Value.Errors[0].ErrorMessage;
+                    }
+                }
+                return Json(new { ok = false, errores = errores });
+            }
+
+            // 3. Todo correcto: guardamos con el mismo DAO de la Actividad 5
+            producto.Codigo = producto.Codigo.Trim();
+            producto.Nombre = producto.Nombre.Trim();
+            _dao.Insertar(producto);
+
+            // El mensaje se muestra en la lista cuando la página se recarga
+            TempData["Mensaje"] = $"Listo: \"{producto.Nombre}\" se agregó al catálogo.";
+            return Json(new { ok = true });
+        }
 
         // UPDATE: GET /Producto/Edit/5 -> muestra el formulario con los datos actuales
         public IActionResult Edit(int id)

@@ -1,0 +1,39 @@
+flowchart TD
+    L["1. Login<br/>Usuario y contraseña"]
+    L -- "Autenticación exitosa" --> M
+    L -. "Datos incorrectos" .-> LE{{"Aviso: El usuario o la contraseña no coinciden.<br/>Inténtalo de nuevo"}}
+
+    subgraph NAV["Barra lateral fija (~20%) · navegación constante"]
+        M["2. Menú Principal / Dashboard"]
+    end
+
+    M --> P["2.1 Gestión de Productos"]
+    M --> V["2.2 Ventas (Maestro-Detalle)"]
+    M --> R["2.3 Reportes Gerenciales"]
+
+    P --> PN[/"Modal: Nuevo producto"/]
+    P --> PE[/"Modal: Editar producto"/]
+    P --> PD{{"Confirmación: ¿Eliminar producto?"}}
+    PN -. "Esc / Cancelar con datos" .-> PC{{"Confirmación: ¿Descartar datos sin guardar?"}}
+
+    V --> VC[/"Modal: Buscar cliente / Nuevo cliente rápido"/]
+    V --> VB[/"Modal: Buscar producto por código"/]
+    V --> VD[/"Modal: Aplicar descuento"/]
+    V --> VF[/"Modal: Finalizar cobro y emitir ticket"/]
+    VF --> VOK{{"Confirmación: Venta #N registrada por Bs. X"}}
+
+    R --> RF[/"Modal: Filtrar por fechas"/]
+    R --> RV["Reporte de Ventas / Cobranzas"]
+
+    P -. "Volver por el menú" .-> M
+    V -. "Volver por el menú" .-> M
+    R -. "Volver por el menú" .-> M
+    M -- "Cerrar sesión" --> L
+
+    classDef pantalla fill:#1F3B57,stroke:#1F3B57,color:#FFFFFF
+    classDef modal fill:#FFFFFF,stroke:#1E8449,stroke-width:2px,color:#1F3B57
+    classDef confirmar fill:#FFFFFF,stroke:#C0392B,stroke-width:2px,color:#1F3B57
+    class L,M,P,V,R,RV pantalla
+    class PN,PE,VC,VB,VD,VF,RF modal
+    class PD,PC,VOK,LE confirmar
+    style NAV fill:#EEF2F6,stroke:#1F3B57,stroke-dasharray: 5 5,color:#1F3B57

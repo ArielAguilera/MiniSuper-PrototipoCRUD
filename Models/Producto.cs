@@ -10,21 +10,25 @@ namespace PrototipoCRUD.Models
 
         // Código único del producto (por ejemplo el código de barras).
         // Lo usaremos en las siguientes actividades para buscar productos en la venta.
-        [Required(ErrorMessage = "El código es obligatorio")]
-        [StringLength(30, ErrorMessage = "El código no puede tener más de 30 caracteres")]
+        // Actividad 6: mensajes constructivos (dicen cómo corregir, sin culpar al usuario)
+        [Required(ErrorMessage = "Escribe el código del producto (por ejemplo, el código de barras del empaque).")]
+        [StringLength(30, ErrorMessage = "El código puede tener hasta 30 caracteres. Revisa que no tenga espacios de más.")]
         [Display(Name = "Código")]
         public string Codigo { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "El nombre es obligatorio")]
-        [StringLength(100, ErrorMessage = "El nombre no puede tener más de 100 caracteres")]
+        [Required(ErrorMessage = "Escribe el nombre del producto tal como lo verá el cajero (ej. Leche PIL 1L).")]
+        [StringLength(100, ErrorMessage = "El nombre puede tener hasta 100 caracteres. Intenta una versión más corta.")]
+        [Display(Name = "Nombre del producto")]
         public string Nombre { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "El precio es obligatorio")]
-        [Range(0.01, 999999, ErrorMessage = "El precio debe ser mayor a 0")]
+        [Required(ErrorMessage = "Indica el precio de venta en Bs. (ej. 7.50).")]
+        [Range(0.01, 999999, ErrorMessage = "Ingresa un precio de venta mayor a Bs. 0.00 (ej. 7.50).")]
+        [Display(Name = "Precio de venta (Bs.)")]
         public decimal Precio { get; set; }
 
-        [Required(ErrorMessage = "El stock es obligatorio")]
-        [Range(0, 100000, ErrorMessage = "El stock no puede ser negativo")]
+        [Required(ErrorMessage = "Indica cuántas unidades hay en tienda.")]
+        [Range(0, 100000, ErrorMessage = "El stock debe ser 0 o más unidades. Si todavía no llegó mercadería, escribe 0.")]
+        [Display(Name = "Unidades en stock")]
         public int Stock { get; set; }
     }
 }

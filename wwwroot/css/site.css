@@ -1,22 +1,130 @@
-html {
-  font-size: 14px;
+/* =========================================================
+   Minisúper El Ahorro - Estilos (Actividad 6 UI/UX)
+   Paleta limitada de 4 colores (la misma del diseño en Figma):
+     Azul marino  #1F3B57 -> barra lateral, títulos y textos
+     Blanco       #FFFFFF -> fondo del área de trabajo
+     Verde        #1E8449 -> acción principal (Guardar / Nuevo)
+     Rojo         #C0392B -> alertas, errores y Eliminar
+   ========================================================= */
+:root {
+    --azul: #1F3B57;
+    --blanco: #FFFFFF;
+    --verde: #1E8449;
+    --rojo: #C0392B;
 }
 
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
-}
+html { font-size: 15px; }
 
 body {
-  margin-bottom: 60px;
+    margin: 0;
+    background-color: var(--blanco);
+    color: var(--azul);
+    font-family: Roboto, "Segoe UI", Arial, sans-serif;   /* igual que en Figma */
+}
+
+/* ---------- Distribución 20 / 80 ---------- */
+.contenedor-app {
+    display: flex;
+    min-height: 100vh;
+}
+
+.barra-lateral {
+    width: 20%;              /* ~20% navegación constante */
+    min-width: 190px;
+    background-color: var(--azul);
+    color: var(--blanco);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 16px;
+}
+
+.area-trabajo {
+    width: 80%;              /* ~80% área de trabajo con espacio en blanco */
+    padding: 32px 40px;
+}
+
+/* ---------- Barra lateral ---------- */
+.marca { margin-bottom: 32px; }
+.marca-titulo { font-size: 1.4rem; font-weight: 700; }
+.marca-sub { font-size: 0.95rem; opacity: 0.8; }
+
+.menu { display: flex; flex-direction: column; gap: 6px; }
+
+.menu-item {
+    color: var(--blanco);
+    text-decoration: none;
+    padding: 10px 12px;
+    border-radius: 6px;
+}
+.menu-item:hover { background-color: rgba(255, 255, 255, 0.12); color: var(--blanco); }
+.menu-item.activo { background-color: rgba(255, 255, 255, 0.2); font-weight: 600; }
+.menu-item.deshabilitado { opacity: 0.5; cursor: not-allowed; }
+
+.usuario { margin-top: auto; font-size: 0.85rem; opacity: 0.8; }
+
+/* ---------- Botones con la paleta ---------- */
+.btn-principal {
+    background-color: var(--verde);
+    border-color: var(--verde);
+    color: var(--blanco);
+}
+.btn-principal:hover, .btn-principal:focus { background-color: #186A3B; border-color: #186A3B; color: var(--blanco); }
+
+.btn-secundario {
+    background-color: var(--blanco);
+    border: 1px solid var(--azul);
+    color: var(--azul);
+}
+.btn-secundario:hover { background-color: var(--azul); color: var(--blanco); }
+
+.btn-peligro {
+    background-color: var(--blanco);
+    border: 1px solid var(--rojo);
+    color: var(--rojo);
+}
+.btn-peligro:hover { background-color: var(--rojo); color: var(--blanco); }
+
+/* ---------- Tabla ---------- */
+.tabla-productos thead th { background-color: var(--azul); color: var(--blanco); }
+
+/* ---------- Mensajes ---------- */
+.text-danger, .mensaje-error, .invalid-feedback { color: var(--rojo) !important; }
+
+.alerta-exito {
+    border-left: 4px solid var(--verde);
+    background-color: rgba(30, 132, 73, 0.08);
+    color: var(--azul);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
+
+.alerta-error {
+    border-left: 4px solid var(--rojo);
+    background-color: rgba(192, 57, 43, 0.08);
+    color: var(--azul);
+    padding: 12px 16px;
+    border-radius: 6px;
+}
+
+/* Campo con error: borde rojo suave */
+.form-control.is-invalid { border-color: var(--rojo); }
+
+/* ---------- Modal ---------- */
+.modal-header { border-bottom: 1px solid rgba(31, 59, 87, 0.15); }
+.modal-title { font-weight: 600; }
+.atajos { font-size: 0.8rem; opacity: 0.7; }
+
+/* Panel de confirmación dentro del modal (tolerancia a errores) */
+.confirmar-salida {
+    border-left: 4px solid var(--rojo);
+    background-color: rgba(192, 57, 43, 0.08);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-top: 12px;
+}
+
+/* Foco visible para usar el teclado */
+.btn:focus, .form-control:focus {
+    box-shadow: 0 0 0 0.2rem rgba(31, 59, 87, 0.25);
 }
