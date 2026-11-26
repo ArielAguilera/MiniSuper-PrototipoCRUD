@@ -1,0 +1,275 @@
+@model PrototipoCRUD.Models.Venta
+@{
+    ViewData["Title"] = "Registrar Nueva Venta";
+    var productos = ViewBag.Productos as List<PrototipoCRUD.Models.Producto> ?? new List<PrototipoCRUD.Models.Producto>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0" style="color: #1E293B;">Registro de Venta (Punto de Venta)</h2>
+        <small class="text-muted">Minisúper El Ahorro — Operación Transaccional Maestro-Detalle</small>
+    </div>
+    <span class="badge bg-secondary fs-6">Fecha: @DateTime.Now.ToString("dd/MM/yyyy")</span>
+</div>
+
+@if (TempData["Exito"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>¡Operación exitosa!</strong> @TempData["Exito"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>Atención:</strong> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<form asp-action="Create" method="post" id="formVenta">
+    @Html.AntiForgeryToken()
+
+    <!-- 1. SECCIÓN MAESTRO (Cabecera de la Venta) -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header text-white fw-semibold" style="background-color: #1E293B;">
+            1. Datos Generales de la Venta (Cabecera)
+        </div>
+        <div class="card-body bg-white">
+            <div class="row align-items-end">
+                <div class="col-md-6">
+                    <label asp-for="Cliente" class="form-label fw-semibold">Nombre o Razón Social del Cliente</label>
+                    <input asp-for="Cliente" class="form-control" value="Cliente General" required />
+                </div>
+                <div class="col-md-6 text-md-end mt-3 mt-md-0">
+                    <span class="text-muted">Cajero activo: <strong>Caja Principal</strong></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. SELECTOR PARA AGREGAR PRODUCTOS AL DETALLE -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-light fw-semibold" style="color: #1E293B;">
+            2. Agregar Productos al Carrito
+        </div>
+        <div class="card-body bg-white">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Seleccione Producto</label>
+                    <select id="selectProducto" class="form-select">
+                        <option value="">-- Elija un producto del catálogo --</option>
+                        @foreach (var p in productos)
+                        {
+                            <option value="@p.Id"
+                                    data-nombre="@p.Nombre"
+                                    data-precio="@p.Precio.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                    data-stock="@p.Stock">
+                                [@p.Codigo] @p.Nombre — Bs. @p.Precio.ToString("N2") (Stock: @p.Stock)
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Cantidad</label>
+                    <input type="number" id="txtCantidad" class="form-control text-end" value="1" min="1" />
+                </div>
+                <div class="col-md-3">
+                    <button type="button" id="btnAgregarItem" class="btn btn-primary w-100">
+                        + Agregar al detalle
+                    </button>
+                </div>
+            </div>
+            <div id="avisoCarrito" class="text-danger small mt-2 d-none"></div>
+        </div>
+    </div>
+
+    <!-- 3. SECCIÓN DETALLE (Tabla Dinámica en Memoria) -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header text-white fw-semibold" style="background-color: #1E293B;">
+            3. Detalle de Productos a Vender
+        </div>
+        <div class="card-body p-0 bg-white">
+            <table class="table table-hover table-bordered mb-0 align-middle" id="tablaDetalle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Producto</th>
+                        <th class="text-end" style="width: 140px;">Precio Unit. (Bs.)</th>
+                        <th class="text-end" style="width: 120px;">Cantidad</th>
+                        <th class="text-end" style="width: 150px;">Subtotal (Bs.)</th>
+                        <th class="text-center" style="width: 110px;">Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="cuerpoDetalle">
+                    <tr id="filaVacia">
+                        <td colspan="5" class="text-center text-muted py-4">
+                            Aún no ha agregado productos a esta venta.
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr class="table-light">
+                        <td colspan="3" class="text-end fw-bold fs-5">TOTAL A COBRAR (Bs.):</td>
+                        <td class="text-end fw-bold fs-5 text-success" id="lblTotalGeneral">0.00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Contenedor vacío que JavaScript llena dinámicamente al agregar productos -->
+    <div id="inputsOcultos"></div>
+
+    <div class="d-flex justify-content-end gap-2">
+        <a asp-action="Create" class="btn btn-outline-secondary">Limpiar Todo</a>
+        <button type="submit" class="btn btn-success btn-lg px-4">
+            Confirmar y Registrar Venta
+        </button>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            let carrito = [];
+            const sepDecimal = "@System.Globalization.CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator";
+
+            const selectProducto = document.getElementById("selectProducto");
+            const txtCantidad = document.getElementById("txtCantidad");
+            const btnAgregar = document.getElementById("btnAgregarItem");
+            const cuerpoDetalle = document.getElementById("cuerpoDetalle");
+            const inputsOcultos = document.getElementById("inputsOcultos");
+            const lblTotalGeneral = document.getElementById("lblTotalGeneral");
+            const avisoCarrito = document.getElementById("avisoCarrito");
+
+            function mostrarAviso(msg) {
+                avisoCarrito.textContent = msg;
+                avisoCarrito.classList.remove("d-none");
+            }
+
+            function ocultarAviso() {
+                avisoCarrito.classList.add("d-none");
+            }
+
+            btnAgregar.addEventListener("click", function () {
+                ocultarAviso();
+                const opcion = selectProducto.options[selectProducto.selectedIndex];
+
+                if (!opcion || !opcion.value) {
+                    mostrarAviso("Seleccione un producto de la lista.");
+                    return;
+                }
+
+                const idProducto = parseInt(opcion.value);
+                const nombre = opcion.getAttribute("data-nombre");
+                const precio = parseFloat(opcion.getAttribute("data-precio"));
+                const stock = parseInt(opcion.getAttribute("data-stock"));
+                const cantidad = parseInt(txtCantidad.value);
+
+                if (isNaN(cantidad) || cantidad <= 0) {
+                    mostrarAviso("La cantidad debe ser mayor a 0.");
+                    return;
+                }
+
+                const existente = carrito.find(x => x.idProducto === idProducto);
+                const cantidadTotal = (existente ? existente.cantidad : 0) + cantidad;
+
+                if (cantidadTotal > stock) {
+                    mostrarAviso(`Stock insuficiente. Solo quedan ${stock} unidades disponibles de ${nombre}.`);
+                    return;
+                }
+
+                if (existente) {
+                    existente.cantidad = cantidadTotal;
+                } else {
+                    carrito.push({
+                        idProducto: idProducto,
+                        nombre: nombre,
+                        precioUnitario: precio,
+                        cantidad: cantidad
+                    });
+                }
+
+                txtCantidad.value = "1";
+                selectProducto.selectedIndex = 0;
+                renderizarTabla();
+            });
+
+            window.quitarItem = function (indice) {
+                carrito.splice(indice, 1);
+                renderizarTabla();
+            };
+
+            function renderizarTabla() {
+                cuerpoDetalle.innerHTML = "";
+                inputsOcultos.innerHTML = "";
+
+                if (carrito.length === 0) {
+                    cuerpoDetalle.innerHTML = `
+                        <tr id="filaVacia">
+                            <td colspan="5" class="text-center text-muted py-4">
+                                Aún no ha agregado productos a esta venta.
+                            </td>
+                        </tr>`;
+                    lblTotalGeneral.textContent = "0.00";
+                    return;
+                }
+
+                let total = 0;
+
+                carrito.forEach((item, index) => {
+                    const subtotal = item.cantidad * item.precioUnitario;
+                    total += subtotal;
+
+                    const tr = document.createElement("tr");
+
+                    const c1 = tr.insertCell();
+                    c1.textContent = item.nombre;
+
+                    const c2 = tr.insertCell();
+                    c2.className = "text-end";
+                    c2.textContent = item.precioUnitario.toFixed(2);
+
+                    const c3 = tr.insertCell();
+                    c3.className = "text-end";
+                    c3.textContent = item.cantidad;
+
+                    const c4 = tr.insertCell();
+                    c4.className = "text-end fw-semibold";
+                    c4.textContent = subtotal.toFixed(2);
+
+                    const c5 = tr.insertCell();
+                    c5.className = "text-center";
+                    const btnQuitar = document.createElement("button");
+                    btnQuitar.type = "button";
+                    btnQuitar.className = "btn btn-sm btn-outline-danger";
+                    btnQuitar.textContent = "Quitar";
+                    btnQuitar.onclick = () => quitarItem(index);
+                    c5.appendChild(btnQuitar);
+
+                    cuerpoDetalle.appendChild(tr);
+
+                    const precioFormateado = item.precioUnitario.toFixed(2).replace(".", sepDecimal);
+                    const campos = {
+                        IdProducto: item.idProducto,
+                        NombreProducto: item.nombre,
+                        Cantidad: item.cantidad,
+                        PrecioUnitario: precioFormateado
+                    };
+
+                    for (const [clave, valor] of Object.entries(campos)) {
+                        const hidden = document.createElement("input");
+                        hidden.type = "hidden";
+                        hidden.name = `Detalles[${index}].${clave}`;
+                        hidden.value = valor;
+                        inputsOcultos.appendChild(hidden);
+                    }
+                });
+
+                lblTotalGeneral.textContent = total.toFixed(2);
+            }
+        });
+    </script>
+}

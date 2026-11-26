@@ -28,8 +28,8 @@
             <nav class="menu">
                 <a class="menu-item @(controladorActual == "Producto" ? "activo" : "")"
                    asp-controller="Producto" asp-action="Index">Productos</a>
-                @* Estos módulos se programan en las Actividades 7 y 10 *@
-                <span class="menu-item deshabilitado" title="Disponible en la Actividad 7">Ventas</span>
+                <a class="menu-item @(controladorActual == "Venta" ? "activo" : "")"
+                   asp-controller="Venta" asp-action="Create">Ventas</a>
                 <span class="menu-item deshabilitado" title="Disponible en la Actividad 10">Reportes</span>
             </nav>
 
