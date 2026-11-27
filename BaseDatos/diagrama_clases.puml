@@ -1,17 +1,55 @@
-@startuml DiagramaClases_MinisuperElAhorro
-' Diagrama de clases del prototipo CRUD (Actividad 5)
+@startuml DiagramaClases_MinisuperElAhorro_CR01
+' Diagrama de clases actualizado - Actividad 8 (CR-01: Control de Descuentos y Trazabilidad)
 ' Pegar en https://www.plantuml.com/plantuml para generar la imagen
+' LEYENDA: fondo verde = clase/atributo/método NUEVO o MODIFICADO por CR-01
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
-title Minisúper El Ahorro - Prototipo CRUD de Productos (MVC + DAO)
+skinparam shadowing false
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #475569
+}
+title Minisúper El Ahorro - Módulo de Ventas con Descuento (CR-01)
+
+legend right
+  |= Color |= Significado |
+  | <back:#BBF7D0>   </back> | Nuevo / modificado en CR-01 |
+  | <back:#FFFFFF>   </back> | Sin cambios |
+endlegend
 
 package "Models" {
   class Producto {
     + Id : int
-    + Codigo : string  <<unique>>
+    + Codigo : string
     + Nombre : string
     + Precio : decimal
     + Stock : int
+  }
+
+  class DetalleVenta {
+    + Id : int
+    + IdVenta : int
+    + IdProducto : int
+    + NombreProducto : string
+    + Cantidad : int
+    + PrecioUnitario : decimal
+    + Subtotal : decimal {readOnly}
+  }
+
+  class Venta #BBF7D0 {
+    + Id : int
+    + Fecha : DateTime
+    + Cliente : string
+    + Detalles : List<DetalleVenta>
+    --
+    <back:#86EFAC>+ Vendedor : string</back>
+    <back:#86EFAC>+ PorcentajeDescuento : decimal {private set}</back>
+    <back:#86EFAC>+ SubtotalBruto : decimal {readOnly}</back>
+    <back:#86EFAC>+ MontoDescuento : decimal {readOnly}</back>
+    <back:#86EFAC>+ TotalFinal : decimal {readOnly}</back>
+    + Total : decimal  <<ahora = TotalFinal>>
+    --
+    <back:#86EFAC>+ AplicarDescuento(porcentaje : decimal) : void</back>
   }
 }
 
@@ -20,7 +58,6 @@ package "Data" {
     + Cadena : string
   }
   class ProductoDAO {
-    - cadenaConexion : string
     + Insertar(p : Producto) : void
     + ObtenerTodos() : List<Producto>
     + ObtenerPorId(id : int) : Producto
@@ -28,24 +65,32 @@ package "Data" {
     + Eliminar(id : int) : void
     + ExisteCodigo(codigo : string, idActual : int) : bool
   }
+  class VentaDAO #BBF7D0 {
+    <back:#86EFAC>+ RegistrarVenta(venta : Venta) : int  <<INSERT con vendedor y descuento>></back>
+  }
 }
 
 package "Controllers" {
   class ProductoController {
-    - _dao : ProductoDAO
     + Index() : IActionResult
     + Create() : IActionResult
-    + Create(producto : Producto) : IActionResult
-    + Edit(id : int) : IActionResult
-    + Edit(producto : Producto) : IActionResult
-    + Delete(id : int) : IActionResult
+  }
+  class VentaController #BBF7D0 {
+    - _productoDao : ProductoDAO
+    - _ventaDao : VentaDAO
+    + Create() : IActionResult
+    <back:#86EFAC>+ Create(venta : Venta, porcentajeDescuento : decimal?) : IActionResult</back>
+    <back:#86EFAC>- VolverConAviso(venta : Venta, mensaje : string) : IActionResult</back>
   }
 }
 
-package "Views/Producto" {
-  class "Index.cshtml" as Index <<view>>
-  class "Create.cshtml" as Create <<view>>
-  class "Edit.cshtml" as Edit <<view>>
+package "Views" {
+  class "Venta/Create.cshtml" as VistaVenta <<view>> #BBF7D0 {
+    <back:#86EFAC>+ input Vendedor</back>
+    <back:#86EFAC>+ input porcentajeDescuento (%)</back>
+    <back:#86EFAC>+ cálculo en tiempo real</back>
+    <back:#86EFAC>+ aviso no punitivo si > 20%</back>
+  }
 }
 
 database "PostgreSQL: minisuper" as BD {
@@ -56,14 +101,41 @@ database "PostgreSQL: minisuper" as BD {
     {field} precio : NUMERIC(10,2)
     {field} stock : INT
   }
+  class detalle_ventas <<table>> {
+    {field} id : SERIAL <<PK>>
+    {field} id_venta : INT <<FK>>
+    {field} id_producto : INT <<FK>>
+    {field} cantidad : INT
+    {field} precio_unitario : NUMERIC(10,2)
+    {field} subtotal : NUMERIC(10,2)
+  }
+  class ventas <<table>> #BBF7D0 {
+    {field} id : SERIAL <<PK>>
+    {field} fecha : TIMESTAMP
+    {field} cliente : VARCHAR(100)
+    {field} total : NUMERIC(10,2)
+    --
+    <back:#86EFAC>{field} vendedor : VARCHAR(100)</back>
+    <back:#86EFAC>{field} subtotal_bruto : NUMERIC(10,2)</back>
+    <back:#86EFAC>{field} porcentaje_descuento : NUMERIC(5,2) <<CHECK 0..20>></back>
+    <back:#86EFAC>{field} monto_descuento : NUMERIC(10,2)</back>
+    <back:#86EFAC>{field} total_final : NUMERIC(10,2)</back>
+  }
 }
 
+Venta "1" *-- "1..*" DetalleVenta : contiene
+DetalleVenta ..> Producto : referencia por IdProducto
+VentaController --> VentaDAO : usa
+VentaController --> ProductoDAO : usa
+VentaController ..> Venta : recibe / valida con AplicarDescuento()
+VentaController ..> VistaVenta : muestra
+VentaDAO ..> Venta : lee
+VentaDAO ..> Conexion : obtiene cadena
+VentaDAO --> ventas : INSERT (transacción)
+VentaDAO --> detalle_ventas : INSERT
+VentaDAO --> productos : UPDATE stock
+ProductoDAO ..> Conexion
 ProductoController --> ProductoDAO : usa
-ProductoController ..> Producto : recibe / envía
-ProductoController ..> Index : muestra
-ProductoController ..> Create : muestra
-ProductoController ..> Edit : muestra
-ProductoDAO ..> Producto : crea / lee
-ProductoDAO ..> Conexion : obtiene cadena
-ProductoDAO --> productos : SQL (Npgsql)
+ProductoDAO --> productos : SQL
+ventas "1" -- "1..*" detalle_ventas
 @enduml

@@ -1,7 +1,22 @@
+@using System.Linq
 @model PrototipoCRUD.Models.Venta
 @{
     ViewData["Title"] = "Registrar Nueva Venta";
     var productos = ViewBag.Productos as List<PrototipoCRUD.Models.Producto> ?? new List<PrototipoCRUD.Models.Producto>();
+
+    // CR-01: valor del descuento que se vuelve a mostrar si hubo que corregir algo
+    decimal? porcentajeIngresado = ViewBag.PorcentajeIngresado as decimal?;
+    string valorPorcentaje = (porcentajeIngresado ?? Model.PorcentajeDescuento)
+        .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    // Carrito que se vuelve a dibujar si el servidor devolvió el formulario con un aviso
+    var carritoInicial = Model.Detalles.Select(d => new
+    {
+        idProducto = d.IdProducto,
+        nombre = d.NombreProducto,
+        precioUnitario = d.PrecioUnitario,
+        cantidad = d.Cantidad
+    });
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -38,14 +53,28 @@
         </div>
         <div class="card-body bg-white">
             <div class="row align-items-end">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label asp-for="Cliente" class="form-label fw-semibold">Nombre o Razón Social del Cliente</label>
                     <input asp-for="Cliente" class="form-control" value="Cliente General" required />
                 </div>
-                <div class="col-md-6 text-md-end mt-3 mt-md-0">
-                    <span class="text-muted">Cajero activo: <strong>Caja Principal</strong></span>
+                <div class="col-md-4 mt-3 mt-md-0">
+                    <label asp-for="Vendedor" class="form-label fw-semibold">Vendedor</label>
+                    <input asp-for="Vendedor" class="form-control" maxlength="100"
+                           placeholder="Ej. Carlos Pérez" required />
+                </div>
+                <div class="col-md-4 mt-3 mt-md-0">
+                    <label for="porcentajeDescuento" class="form-label fw-semibold">Descuento al cliente (%)</label>
+                    <div class="input-group">
+                        <input type="number" id="porcentajeDescuento" name="porcentajeDescuento"
+                               class="form-control text-end" value="@valorPorcentaje"
+                               min="0" step="0.01" inputmode="decimal" />
+                        <span class="input-group-text">%</span>
+                    </div>
+                    <div class="form-text">Máximo permitido por política: 20%.</div>
                 </div>
             </div>
+            <div id="avisoDescuento" class="alert alert-warning py-2 mt-3 mb-0 d-none" role="alert"></div>
+            <div class="text-muted small mt-3">Cajero activo: <strong>Caja Principal</strong></div>
         </div>
     </div>
 
@@ -110,6 +139,16 @@
                 </tbody>
                 <tfoot>
                     <tr class="table-light">
+                        <td colspan="3" class="text-end">Subtotal bruto (Bs.):</td>
+                        <td class="text-end" id="lblSubtotalBruto">0.00</td>
+                        <td></td>
+                    </tr>
+                    <tr class="table-light">
+                        <td colspan="3" class="text-end">Descuento (<span id="lblPorcentaje">0</span>%) (Bs.):</td>
+                        <td class="text-end text-danger" id="lblMontoDescuento">- 0.00</td>
+                        <td></td>
+                    </tr>
+                    <tr class="table-light">
                         <td colspan="3" class="text-end fw-bold fs-5">TOTAL A COBRAR (Bs.):</td>
                         <td class="text-end fw-bold fs-5 text-success" id="lblTotalGeneral">0.00</td>
                         <td></td>
@@ -133,7 +172,9 @@
 @section Scripts {
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            let carrito = [];
+            // Si el servidor devolvió el formulario con un aviso, recuperamos el carrito
+            let carrito = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(carritoInicial));
+            const DESCUENTO_MAXIMO = 20;
             const sepDecimal = "@System.Globalization.CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator";
 
             const selectProducto = document.getElementById("selectProducto");
@@ -143,6 +184,37 @@
             const inputsOcultos = document.getElementById("inputsOcultos");
             const lblTotalGeneral = document.getElementById("lblTotalGeneral");
             const avisoCarrito = document.getElementById("avisoCarrito");
+            const formVenta = document.getElementById("formVenta");
+            const txtDescuento = document.getElementById("porcentajeDescuento");
+            const avisoDescuento = document.getElementById("avisoDescuento");
+            const lblSubtotalBruto = document.getElementById("lblSubtotalBruto");
+            const lblPorcentaje = document.getElementById("lblPorcentaje");
+            const lblMontoDescuento = document.getElementById("lblMontoDescuento");
+
+            // Devuelve { valido, porcentaje, mensaje } según la regla 0% – 20%
+            function leerDescuento() {
+                const texto = txtDescuento.value.trim();
+                if (texto === "") return { valido: true, porcentaje: 0, mensaje: "" };
+                const p = parseFloat(texto);
+                if (isNaN(p)) {
+                    return { valido: false, porcentaje: 0,
+                        mensaje: "Escribe el descuento como un número entre 0 y " + DESCUENTO_MAXIMO + " (ej. 10 o 12.5)." };
+                }
+                if (p < 0) {
+                    return { valido: false, porcentaje: 0,
+                        mensaje: "El descuento no puede ser negativo. Escribe un valor entre 0 y " + DESCUENTO_MAXIMO + "." };
+                }
+                if (p > DESCUENTO_MAXIMO) {
+                    return { valido: false, porcentaje: 0,
+                        mensaje: "El descuento máximo que puedes otorgar es " + DESCUENTO_MAXIMO + "%. " +
+                                 "Ingresaste " + p + "%: ajústalo a " + DESCUENTO_MAXIMO + "% o menos para continuar." };
+                }
+                return { valido: true, porcentaje: p, mensaje: "" };
+            }
+
+            function redondear2(n) {
+                return Math.round((n + Number.EPSILON) * 100) / 100;
+            }
 
             function mostrarAviso(msg) {
                 avisoCarrito.textContent = msg;
@@ -213,7 +285,7 @@
                                 Aún no ha agregado productos a esta venta.
                             </td>
                         </tr>`;
-                    lblTotalGeneral.textContent = "0.00";
+                    actualizarTotales(0);
                     return;
                 }
 
@@ -268,8 +340,48 @@
                     }
                 });
 
-                lblTotalGeneral.textContent = total.toFixed(2);
+                actualizarTotales(total);
             }
+
+            // Cálculo en tiempo real: subtotal bruto, descuento y total final
+            function actualizarTotales(subtotalBruto) {
+                const d = leerDescuento();
+                if (d.valido) {
+                    avisoDescuento.classList.add("d-none");
+                    txtDescuento.classList.remove("is-invalid");
+                } else {
+                    avisoDescuento.textContent = d.mensaje;
+                    avisoDescuento.classList.remove("d-none");
+                    txtDescuento.classList.add("is-invalid");
+                }
+                // Si el valor no es válido no se aplica ningún descuento en la vista previa
+                const monto = redondear2(subtotalBruto * (d.porcentaje / 100));
+                lblSubtotalBruto.textContent = subtotalBruto.toFixed(2);
+                lblPorcentaje.textContent = d.porcentaje;
+                lblMontoDescuento.textContent = "- " + monto.toFixed(2);
+                lblTotalGeneral.textContent = (subtotalBruto - monto).toFixed(2);
+            }
+
+            function subtotalActual() {
+                return carrito.reduce((acc, x) => acc + x.cantidad * x.precioUnitario, 0);
+            }
+
+            txtDescuento.addEventListener("input", function () {
+                actualizarTotales(subtotalActual());
+            });
+
+            // Antes de enviar: si el descuento no es válido, avisamos y no enviamos (el servidor y la BD también lo validan)
+            formVenta.addEventListener("submit", function (e) {
+                const d = leerDescuento();
+                if (!d.valido) {
+                    e.preventDefault();
+                    actualizarTotales(subtotalActual());
+                    txtDescuento.focus();
+                }
+            });
+
+            // Dibuja el carrito inicial (vacío o recuperado tras un aviso del servidor)
+            renderizarTabla();
         });
     </script>
 }

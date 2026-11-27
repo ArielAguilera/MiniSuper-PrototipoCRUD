@@ -6,6 +6,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- El proyecto de pruebas vive dentro de esta carpeta: se excluye para que la web no compile sus archivos -->
+  <ItemGroup>
+    <Compile Remove="PrototipoCRUD.Tests/**" />
+    <Content Remove="PrototipoCRUD.Tests/**" />
+    <EmbeddedResource Remove="PrototipoCRUD.Tests/**" />
+    <None Remove="PrototipoCRUD.Tests/**" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="8.0.5" />
   </ItemGroup>
