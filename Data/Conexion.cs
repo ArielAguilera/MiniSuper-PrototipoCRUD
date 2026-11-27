@@ -6,6 +6,6 @@ namespace PrototipoCRUD.Data
     {
         // Cambiar Password por la contraseña de su PostgreSQL local
         public static readonly string Cadena =
-            "Host=localhost;Port=5432;Database=minisuper;Username=postgres;Password=78246586";
+            "Host=localhost;Port=5432;Database=minisuper;Username=postgres;Password=Tu_Password";
     }
 }
