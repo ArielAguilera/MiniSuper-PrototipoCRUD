@@ -21,11 +21,22 @@
     <div class="alerta-exito">@TempData["Mensaje"]</div>
 }
 
-@if (Model.Count == 0)
+@* Actividad 9: avisos orientadores (la BD no responde, producto con ventas, producto inexistente...) *@
+@if (TempData["Error"] != null)
+{
+    <div class="alerta-error">@TempData["Error"]</div>
+}
+
+@if (ViewBag.ErrorCarga != null)
+{
+    <div class="alerta-error">@ViewBag.ErrorCarga</div>
+}
+
+@if (Model.Count == 0 && ViewBag.ErrorCarga == null)
 {
     <div class="alerta-exito">Todavía no hay productos. Presiona "+ Nuevo producto" para registrar el primero.</div>
 }
-else
+else if (Model.Count > 0)
 {
     <table class="table table-bordered align-middle tabla-productos">
         <thead>
@@ -287,8 +298,14 @@ else
             if (resultado.ok) {
                 modal.hide();
                 location.reload();                   // recarga la lista con el mensaje de éxito
-            } else {
+            } else if (resultado.errores) {
                 mostrarErrores(resultado.errores);   // por ejemplo: código repetido
+            } else {
+                // Actividad 9: aviso general orientador (por ejemplo, la base de datos no responde)
+                limpiarErrores();
+                errorGeneral.textContent = resultado.errorGeneral ||
+                    'No pudimos guardar el producto en este momento. Tus datos siguen aquí; inténtalo de nuevo en unos segundos.';
+                errorGeneral.classList.remove('d-none');
             }
         } catch (error) {
             // Nunca mostramos el error técnico al usuario

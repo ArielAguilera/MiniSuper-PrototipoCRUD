@@ -6,15 +6,30 @@ namespace PrototipoCRUD.Controllers
 {
     // Controlador: recibe las peticiones del navegador, llama al DAO
     // y decide qué vista mostrar. No tiene SQL.
+    //
+    // ACTIVIDAD 9: cada acción está protegida con try-catch. El detalle técnico lo registra
+    // la capa de datos en errores_sistema.log; aquí solo se muestra un mensaje UX orientador.
     public class ProductoController : Controller
     {
         private ProductoDAO _dao = new ProductoDAO();
 
+        private const string MensajeCodigoRepetido =
+            "Este código ya pertenece a otro producto del catálogo. Verifica el código del empaque o edita el producto existente.";
+
         // READ: GET /Producto  -> muestra la lista de productos
         public IActionResult Index()
         {
-            var productos = _dao.ObtenerTodos();
-            return View(productos);
+            try
+            {
+                var productos = _dao.ObtenerTodos();
+                return View(productos);
+            }
+            catch (Exception ex)
+            {
+                // Si la BD no responde, la pantalla sigue viva y explica qué hacer
+                ViewBag.ErrorCarga = MensajesUx.Traducir(ex, "Consultar listado de productos");
+                return View(new List<Producto>());
+            }
         }
 
         // CREATE: GET /Producto/Create -> muestra el formulario vacío
@@ -28,74 +43,115 @@ namespace PrototipoCRUD.Controllers
         [ValidateAntiForgeryToken]
         public IActionResult Create(Producto producto)
         {
-            // Validamos que el código no se repita (la BD también lo controla con UNIQUE)
-            if (!string.IsNullOrWhiteSpace(producto.Codigo) && _dao.ExisteCodigo(producto.Codigo, 0))
+            try
             {
-                ModelState.AddModelError("Codigo", "Ya existe un producto con ese código");
-            }
+                string codigo = (producto.Codigo ?? string.Empty).Trim();
 
-            // Si hay errores de validación volvemos a mostrar el formulario con los mensajes
-            if (!ModelState.IsValid)
+                // Validamos que el código no se repita (la BD también lo controla con UNIQUE)
+                if (codigo.Length > 0 && _dao.ExisteCodigo(codigo, 0))
+                {
+                    ModelState.AddModelError("Codigo", MensajeCodigoRepetido);
+                }
+
+                // Si hay errores de validación volvemos a mostrar el formulario con los mensajes
+                if (!ModelState.IsValid)
+                {
+                    return View(producto);
+                }
+
+                producto.Codigo = codigo;
+                producto.Nombre = (producto.Nombre ?? string.Empty).Trim();
+                _dao.Insertar(producto);
+                TempData["Mensaje"] = "Producto registrado correctamente";
+                return RedirectToAction("Index");
+            }
+            catch (OperacionFallidaException ex) when (ex.Tipo == TipoFalla.CodigoDuplicado)
             {
+                // Otra persona registró el mismo código justo antes: lo señalamos en el campo
+                ModelState.AddModelError("Codigo", ex.Message);
                 return View(producto);
             }
-
-            _dao.Insertar(producto);
-            TempData["Mensaje"] = "Producto registrado correctamente";
-            return RedirectToAction("Index");
+            catch (Exception ex)
+            {
+                ModelState.AddModelError(string.Empty, MensajesUx.Traducir(ex, "Registrar producto"));
+                return View(producto);
+            }
         }
-        
+
         // ACTIVIDAD 6: CREATE desde la ventana modal "Nuevo Producto"
         // POST /Producto/CrearModal
         // El modal envía el formulario con JavaScript (fetch) y esta acción
         // responde en JSON. Así el modal NO se cierra si hay errores y el
         // usuario no pierde lo que escribió.
-        
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult CrearModal(Producto producto)
         {
-            // 1. Regla de negocio: el código no se puede repetir
-            if (!string.IsNullOrWhiteSpace(producto.Codigo) && _dao.ExisteCodigo(producto.Codigo.Trim(), 0))
+            try
             {
-                ModelState.AddModelError("Codigo",
-                    "Este código ya pertenece a otro producto del catálogo. Verifica el código del empaque o búscalo en la lista para editarlo.");
-            }
+                string codigo = (producto.Codigo ?? string.Empty).Trim();
 
-            // 2. Si hay errores, devolvemos un mensaje por cada campo (sin excepciones técnicas)
-            if (!ModelState.IsValid)
-            {
-                var errores = new Dictionary<string, string>();
-                foreach (var campo in ModelState)
+                // 1. Regla de negocio: el código no se puede repetir
+                if (codigo.Length > 0 && _dao.ExisteCodigo(codigo, 0))
                 {
-                    if (campo.Value.Errors.Count > 0)
-                    {
-                        // Tomamos solo el primer mensaje de cada campo para no saturar
-                        errores[campo.Key] = campo.Value.Errors[0].ErrorMessage;
-                    }
+                    ModelState.AddModelError("Codigo", MensajeCodigoRepetido);
                 }
+
+                // 2. Si hay errores, devolvemos un mensaje por cada campo (sin excepciones técnicas)
+                if (!ModelState.IsValid)
+                {
+                    var errores = new Dictionary<string, string>();
+                    foreach (var campo in ModelState)
+                    {
+                        if (campo.Value.Errors.Count > 0)
+                        {
+                            // Tomamos solo el primer mensaje de cada campo para no saturar
+                            errores[campo.Key] = campo.Value.Errors[0].ErrorMessage;
+                        }
+                    }
+                    return Json(new { ok = false, errores = errores });
+                }
+
+                // 3. Todo correcto: guardamos con el mismo DAO de la Actividad 5
+                producto.Codigo = codigo;
+                producto.Nombre = (producto.Nombre ?? string.Empty).Trim();
+                _dao.Insertar(producto);
+
+                // El mensaje se muestra en la lista cuando la página se recarga
+                TempData["Mensaje"] = $"Listo: \"{producto.Nombre}\" se agregó al catálogo.";
+                return Json(new { ok = true });
+            }
+            catch (OperacionFallidaException ex) when (ex.Tipo == TipoFalla.CodigoDuplicado)
+            {
+                var errores = new Dictionary<string, string> { ["Codigo"] = ex.Message };
                 return Json(new { ok = false, errores = errores });
             }
-
-            // 3. Todo correcto: guardamos con el mismo DAO de la Actividad 5
-            producto.Codigo = producto.Codigo.Trim();
-            producto.Nombre = producto.Nombre.Trim();
-            _dao.Insertar(producto);
-
-            // El mensaje se muestra en la lista cuando la página se recarga
-            TempData["Mensaje"] = $"Listo: \"{producto.Nombre}\" se agregó al catálogo.";
-            return Json(new { ok = true });
+            catch (Exception ex)
+            {
+                // Mensaje general dentro del modal (el modal no se cierra y no se pierde lo escrito)
+                return Json(new { ok = false, errorGeneral = MensajesUx.Traducir(ex, "Registrar producto (modal)") });
+            }
         }
 
         // UPDATE: GET /Producto/Edit/5 -> muestra el formulario con los datos actuales
         public IActionResult Edit(int id)
         {
-            var producto = _dao.ObtenerPorId(id);
-            if (producto == null)
+            try
             {
-                return NotFound(); // el id no existe en la BD
+                var producto = _dao.ObtenerPorId(id);
+                if (producto == null)
+                {
+                    // Referencia nula controlada: en lugar de una página en blanco (404) explicamos qué pasó
+                    TempData["Error"] = "No encontramos ese producto; puede que ya no exista. Revisa la lista e inténtalo de nuevo.";
+                    return RedirectToAction("Index");
+                }
+                return View(producto);
             }
-            return View(producto);
+            catch (Exception ex)
+            {
+                TempData["Error"] = MensajesUx.Traducir(ex, "Abrir edición de producto");
+                return RedirectToAction("Index");
+            }
         }
 
         // UPDATE: POST /Producto/Edit/5 -> guarda los cambios
@@ -103,19 +159,41 @@ namespace PrototipoCRUD.Controllers
         [ValidateAntiForgeryToken]
         public IActionResult Edit(Producto producto)
         {
-            if (!string.IsNullOrWhiteSpace(producto.Codigo) && _dao.ExisteCodigo(producto.Codigo, producto.Id))
+            try
             {
-                ModelState.AddModelError("Codigo", "Ya existe otro producto con ese código");
-            }
+                string codigo = (producto.Codigo ?? string.Empty).Trim();
 
-            if (!ModelState.IsValid)
+                if (codigo.Length > 0 && _dao.ExisteCodigo(codigo, producto.Id))
+                {
+                    ModelState.AddModelError("Codigo", MensajeCodigoRepetido);
+                }
+
+                if (!ModelState.IsValid)
+                {
+                    return View(producto);
+                }
+
+                producto.Codigo = codigo;
+                producto.Nombre = (producto.Nombre ?? string.Empty).Trim();
+                _dao.Actualizar(producto);
+                TempData["Mensaje"] = "Producto actualizado correctamente";
+                return RedirectToAction("Index");
+            }
+            catch (OperacionFallidaException ex) when (ex.Tipo == TipoFalla.CodigoDuplicado)
             {
+                ModelState.AddModelError("Codigo", ex.Message);
                 return View(producto);
             }
-
-            _dao.Actualizar(producto);
-            TempData["Mensaje"] = "Producto actualizado correctamente";
-            return RedirectToAction("Index");
+            catch (OperacionFallidaException ex) when (ex.Tipo == TipoFalla.ProductoInexistente)
+            {
+                TempData["Error"] = ex.Message;
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError(string.Empty, MensajesUx.Traducir(ex, "Actualizar producto"));
+                return View(producto);
+            }
         }
 
         // DELETE: POST /Producto/Delete/5 -> elimina el producto
@@ -124,8 +202,16 @@ namespace PrototipoCRUD.Controllers
         [ValidateAntiForgeryToken]
         public IActionResult Delete(int id)
         {
-            _dao.Eliminar(id);
-            TempData["Mensaje"] = "Producto eliminado correctamente";
+            try
+            {
+                _dao.Eliminar(id);
+                TempData["Mensaje"] = "Producto eliminado correctamente";
+            }
+            catch (Exception ex)
+            {
+                // Ej.: el producto ya tiene ventas registradas (clave foránea) o la BD no responde
+                TempData["Error"] = MensajesUx.Traducir(ex, "Eliminar producto");
+            }
             return RedirectToAction("Index");
         }
     }

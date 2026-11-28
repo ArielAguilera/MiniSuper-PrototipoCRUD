@@ -8,14 +8,55 @@ namespace PrototipoCRUD.Data
     {
         public int RegistrarVenta(Venta venta)
         {
-            using var conn = new NpgsqlConnection(Conexion.Cadena);
-            conn.Open();
+            // ------------------------------------------------------------------
+            // ACTIVIDAD 9 — Cláusulas de guarda (antes de abrir la conexión)
+            // ------------------------------------------------------------------
+            if (venta == null)
+            {
+                throw new ArgumentNullException(nameof(venta), "No se recibieron los datos de la venta.");
+            }
+            if (venta.Detalles == null || venta.Detalles.Count == 0)
+            {
+                throw new ArgumentException("La venta debe incluir al menos un producto.");
+            }
+            if (venta.PorcentajeDescuento < Venta.DescuentoMinimo || venta.PorcentajeDescuento > Venta.DescuentoMaximo)
+            {
+                throw new ArgumentOutOfRangeException(nameof(venta.PorcentajeDescuento), venta.PorcentajeDescuento,
+                    "El descuento permitido debe estar entre 0% y un máximo de 20%.");
+            }
+            foreach (var linea in venta.Detalles)
+            {
+                if (linea == null)
+                {
+                    throw new ArgumentException("La venta contiene una línea de producto vacía.");
+                }
+                if (linea.IdProducto <= 0)
+                {
+                    throw new ArgumentException("Una de las líneas de la venta no tiene un producto seleccionado.");
+                }
+                if (linea.Cantidad <= 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(linea.Cantidad), linea.Cantidad,
+                        "La cantidad de cada producto debe ser al menos 1.");
+                }
+                if (linea.PrecioUnitario < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(linea.PrecioUnitario), linea.PrecioUnitario,
+                        "El precio unitario no puede ser negativo.");
+                }
+            }
 
-            // Iniciamos la transacción atómica (Todo o Nada)
-            using var transaccion = conn.BeginTransaction();
+            NpgsqlConnection? conn = null;
+            NpgsqlTransaction? transaccion = null;
 
             try
             {
+                conn = new NpgsqlConnection(Conexion.Cadena);
+                conn.Open();
+
+                // Iniciamos la transacción atómica (Todo o Nada)
+                transaccion = conn.BeginTransaction();
+
                 // 1. Insertar la Cabecera (Maestro) y recuperar el ID generado con RETURNING id
                 //    CR-01: ahora también guarda el vendedor y los campos del descuento.
                 //    La columna "total" se mantiene (= total final) para no romper lo anterior.
@@ -68,7 +109,12 @@ namespace PrototipoCRUD.Data
                         int filasAfectadas = cmdStock.ExecuteNonQuery();
                         if (filasAfectadas == 0)
                         {
-                            throw new Exception($"Stock insuficiente para el producto '{item.NombreProducto}'.");
+                            string nombre = string.IsNullOrWhiteSpace(item.NombreProducto)
+                                ? "uno de los productos"
+                                : $"«{item.NombreProducto}»";
+                            throw new OperacionFallidaException(TipoFalla.StockInsuficiente,
+                                $"No hay stock suficiente de {nombre} para completar esta venta. " +
+                                "Reduce la cantidad o actualiza la página para ver el inventario disponible; no se registró nada.");
                         }
                     }
 
@@ -89,11 +135,53 @@ namespace PrototipoCRUD.Data
                 transaccion.Commit();
                 return idVentaGenerado;
             }
-            catch
+            catch (PostgresException exPg)                  // 1) la BD rechazó la orden (CHECK 23514, FK 23503, ...)
             {
-                // Si algo falló, revertimos cualquier cambio parcial en la base de datos
-                transaccion.Rollback();
+                RevertirSinOcultarErrores(transaccion);
+                RegistroErrores.RegistrarLogTecnico(exPg, "Registrar venta");
+                throw TraductorErrores.Traducir(exPg, OperacionDatos.RegistrarVenta);
+            }
+            catch (NpgsqlException exRed)                   // 2) PostgreSQL apagado o red caída
+            {
+                RevertirSinOcultarErrores(transaccion);
+                RegistroErrores.RegistrarLogTecnico(exRed, "Registrar venta");
+                throw TraductorErrores.TraducirRed(exRed);
+            }
+            catch (OperacionFallidaException)               // 3) regla de negocio (ej. stock insuficiente)
+            {
+                RevertirSinOcultarErrores(transaccion);
                 throw;
+            }
+            catch (Exception ex)                            // 4) cualquier otra: se registra y se re-lanza con throw;
+            {
+                RevertirSinOcultarErrores(transaccion);
+                RegistroErrores.RegistrarLogTecnico(ex, "Registrar venta");
+                throw;
+            }
+            finally
+            {
+                // Limpieza garantizada de transacción y conexión
+                transaccion?.Dispose();
+                conn?.Dispose();
+            }
+        }
+
+        // Si algo falló, revertimos cualquier cambio parcial. Si el propio rollback falla
+        // (por ejemplo, la conexión ya se cayó) lo registramos y seguimos con el error original.
+        private static void RevertirSinOcultarErrores(NpgsqlTransaction? transaccion)
+        {
+            if (transaccion == null)
+            {
+                return;
+            }
+
+            try
+            {
+                transaccion.Rollback();
+            }
+            catch (Exception exRollback)
+            {
+                RegistroErrores.RegistrarLogTecnico(exRollback, "Rollback de la venta");
             }
         }
     }

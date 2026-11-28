@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Npgsql;
 using PrototipoCRUD.Data;
 using PrototipoCRUD.Models;
 
@@ -13,7 +12,16 @@ namespace PrototipoCRUD.Controllers
         // GET: /Venta/Create
         public IActionResult Create()
         {
-            ViewBag.Productos = _productoDao.ObtenerTodos();
+            try
+            {
+                ViewBag.Productos = _productoDao.ObtenerTodos();
+            }
+            catch (Exception ex)
+            {
+                // Si la BD no responde, mostramos el formulario igualmente con un aviso orientador
+                ViewBag.Productos = new List<Producto>();
+                TempData["Error"] = MensajesUx.Traducir(ex, "Cargar productos para vender");
+            }
             return View(new Venta());
         }
 
@@ -30,7 +38,7 @@ namespace PrototipoCRUD.Controllers
             // Validación de borde: impedir guardar ventas vacías
             if (venta.Detalles == null || venta.Detalles.Count == 0)
             {
-                return VolverConAviso(venta, "Debe agregar al menos un producto antes de confirmar la venta.");
+                return VolverConAviso(venta, "Aún no hay productos en la venta. Agrega al menos uno al detalle y vuelve a confirmar.");
             }
 
             // CR-01 (trazabilidad): sin vendedor no se registra la venta
@@ -50,7 +58,7 @@ namespace PrototipoCRUD.Controllers
             {
                 venta.AplicarDescuento(porcentajeDescuento ?? 0m);
             }
-            catch (System.ArgumentOutOfRangeException)
+            catch (ArgumentOutOfRangeException)
             {
                 // Mensaje claro y constructivo: el sistema NO se cierra, la venta sigue armada
                 return VolverConAviso(venta,
@@ -69,15 +77,11 @@ namespace PrototipoCRUD.Controllers
                 TempData["Exito"] = $"¡Venta #{idVenta} registrada correctamente por un total de Bs. {venta.TotalFinal:N2}!{detalleDescuento}";
                 return RedirectToAction("Create");
             }
-            catch (PostgresException pgEx) when (pgEx.SqlState == PostgresErrorCodes.CheckViolation)
+            catch (Exception ex)
             {
-                // Segunda línea de defensa: el CHECK de PostgreSQL rechazó los datos
-                return VolverConAviso(venta,
-                    "La base de datos no aceptó los valores de esta venta (el descuento debe estar entre 0% y 20%). Revisa los datos e inténtalo de nuevo.");
-            }
-            catch (System.Exception ex)
-            {
-                return VolverConAviso(venta, $"No se pudo registrar la venta: {ex.Message}");
+                // Conexión caída, stock insuficiente, clave foránea, CHECK de la BD, etc.
+                // El DAO ya guardó el detalle técnico en errores_sistema.log; aquí solo el mensaje UX.
+                return VolverConAviso(venta, MensajesUx.Traducir(ex, "Registrar venta"));
             }
         }
 
@@ -85,8 +89,23 @@ namespace PrototipoCRUD.Controllers
         private IActionResult VolverConAviso(Venta venta, string mensaje)
         {
             TempData["Error"] = mensaje;
-            ViewBag.Productos = _productoDao.ObtenerTodos();
+            ViewBag.Productos = ObtenerProductosSinFallar();
             return View(venta);
+        }
+
+        // Si la BD está caída no podemos recargar el catálogo, pero tampoco queremos
+        // que esa segunda falla rompa la pantalla: el carrito se conserva y se avisa.
+        private List<Producto> ObtenerProductosSinFallar()
+        {
+            try
+            {
+                return _productoDao.ObtenerTodos();
+            }
+            catch (Exception ex)
+            {
+                RegistroErrores.RegistrarLogTecnico(ex, "Recargar productos tras un aviso de venta");
+                return new List<Producto>();
+            }
         }
     }
 }
