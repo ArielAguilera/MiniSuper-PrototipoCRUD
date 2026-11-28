@@ -1,0 +1,177 @@
+@model PrototipoCRUD.Models.ReporteVentasFiltroViewModel
+@{
+    ViewData["Title"] = "Reporte de Ventas y Cobranzas";
+    bool esMensual = string.Equals(Model.Granularidad, "Mensual", StringComparison.OrdinalIgnoreCase);
+}
+
+<style>
+    @@media print {
+        .no-imprimir, nav, footer { display: none !important; }
+        body { background: #fff !important; font-size: 12px; }
+        .hoja-reporte { box-shadow: none !important; border: none !important; padding: 0 !important; }
+    }
+    .banda-tag { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+
+<div class="container mt-3">
+    <!-- Panel de Filtros (No se imprime) -->
+    <div class="card shadow-sm mb-4 no-imprimir">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">📊 Salidas del Sistema: Reporte de Ventas / Cobranzas</h5>
+            <button type="button" onclick="window.print()" class="btn btn-light btn-sm fw-bold">
+                🖨️ Imprimir / Guardar PDF
+            </button>
+        </div>
+        <div class="card-body">
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger">@TempData["Error"]</div>
+            }
+
+            <form method="post" asp-action="Index" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Fecha Inicio</label>
+                    <input type="date" asp-for="FechaInicio" class="form-control" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Fecha Fin</label>
+                    <input type="date" asp-for="FechaFin" class="form-control" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Granularidad</label>
+                    <select asp-for="Granularidad" class="form-select">
+                        <option value="Diario">Diario (Detalle operativo por día)</option>
+                        <option value="Mensual">Mensual (Consolidado gerencial por mes)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-success w-100 fw-bold">Generar Reporte</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Escenario sin Datos (UX Orientador) -->
+    @if (!string.IsNullOrEmpty(Model.MensajeAviso))
+    {
+        <div class="alert alert-warning border-warning shadow-sm">
+            <h6 class="alert-heading fw-bold">ℹ️ Sin registros en el periodo consultado</h6>
+            <p class="mb-0">@Model.MensajeAviso</p>
+        </div>
+    }
+    else if (Model.Grupos.Any())
+    {
+        <!-- HOJA FORMAL DEL REPORTE -->
+        <div class="card shadow p-4 hoja-reporte">
+            <!-- 1. REPORT HEADER -->
+            <div class="border-bottom pb-3 mb-3 d-flex justify-content-between align-items-start">
+                <div>
+                    <h4 class="fw-bold text-dark mb-1">🛒 MINISÚPER "EL AHORRO"</h4>
+                    <h5 class="text-primary mb-1">Reporte de Ventas y Cobranzas (@Model.Granularidad)</h5>
+                    <small class="text-muted">Periodo filtrado: <strong>@Model.FechaInicio.ToString("dd/MM/yyyy")</strong> al <strong>@Model.FechaFin.ToString("dd/MM/yyyy")</strong></small>
+                </div>
+                <div class="text-end small text-muted">
+                    <div><strong>Fecha de emisión:</strong> @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+                    <div><strong>Generado por:</strong> @Model.UsuarioGenerador</div>
+                </div>
+            </div>
+
+            @foreach (var grupo in Model.Grupos)
+            {
+                <!-- 2. GROUP HEADER -->
+                <div class="bg-light border-start border-4 border-primary px-3 py-2 mb-2 d-flex justify-content-between">
+                    <span class="fw-bold text-primary">
+                        @(esMensual ? $"📅 Mes / Periodo: {grupo.Periodo}" : $"📆 Fecha de Operación: {grupo.Periodo}")
+                    </span>
+                    <span class="badge bg-secondary">@grupo.CantidadOperaciones operación(es)</span>
+                </div>
+
+                <!-- 3. DETAIL -->
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered align-middle mb-0">
+                        <thead class="table-dark">
+                            @if (esMensual)
+                            {
+                                <tr>
+                                    <th>Fecha del Día</th>
+                                    <th class="text-center">Cant. Ventas</th>
+                                    <th class="text-end">Subtotal Bruto (Bs.)</th>
+                                    <th class="text-end">Total Descuentos (Bs.)</th>
+                                    <th class="text-end">Total Cobrado (Bs.)</th>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <th>Nro. Venta</th>
+                                    <th>Hora</th>
+                                    <th>Cliente</th>
+                                    <th>Vendedor</th>
+                                    <th class="text-end">Subtotal (Bs.)</th>
+                                    <th class="text-end">Descuento (Bs.)</th>
+                                    <th class="text-end">Total Cobrado (Bs.)</th>
+                                </tr>
+                            }
+                        </thead>
+                        <tbody>
+                            @foreach (var fila in grupo.Filas)
+                            {
+                                if (esMensual)
+                                {
+                                    <tr>
+                                        <td>@fila.FechaDia</td>
+                                        <td class="text-center">@fila.CantidadVentas</td>
+                                        <td class="text-end">@fila.SubtotalBruto.ToString("N2")</td>
+                                        <td class="text-end text-danger">-@fila.MontoDescuento.ToString("N2")</td>
+                                        <td class="text-end fw-bold">@fila.TotalFinal.ToString("N2")</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td>#@fila.NroVenta</td>
+                                        <td>@fila.Hora</td>
+                                        <td>@fila.Cliente</td>
+                                        <td>@fila.Vendedor</td>
+                                        <td class="text-end">@fila.SubtotalBruto.ToString("N2")</td>
+                                        <td class="text-end text-danger">-@fila.MontoDescuento.ToString("N2")</td>
+                                        <td class="text-end fw-bold">@fila.TotalFinal.ToString("N2")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                        <!-- 4. GROUP FOOTER -->
+                        <tfoot>
+                            <tr class="table-secondary fw-bold">
+                                <td colspan="@(esMensual ? 1 : 4)" class="text-end">
+                                    Subtotal @(esMensual ? $"Mes {grupo.Periodo}" : $"Día {grupo.Periodo}") (@grupo.CantidadOperaciones ventas):
+                                </td>
+                                @if (esMensual)
+                                {
+                                    <td class="text-center">@grupo.CantidadOperaciones</td>
+                                }
+                                <td class="text-end">@grupo.TotalSubtotalBruto.ToString("N2")</td>
+                                <td class="text-end text-danger">-@grupo.TotalDescuentos.ToString("N2")</td>
+                                <td class="text-end text-success">Bs. @grupo.TotalCobrado.ToString("N2")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+
+            <!-- 5. REPORT FOOTER -->
+            <div class="border-top border-2 border-dark pt-3 mt-2">
+                <div class="row align-items-center">
+                    <div class="col-md-6 small text-muted">
+                        Documento generado automáticamente por el sistema PrototipoCRUD · Página 1 de 1
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="fs-6"><strong>Total Operaciones del Periodo:</strong> @Model.TotalOperacionesGeneral</div>
+                        <div class="fs-6 text-danger"><strong>Total Descuentos Otorgados:</strong> -Bs. @Model.TotalDescuentosGeneral.ToString("N2")</div>
+                        <div class="fs-4 fw-bold text-primary">GRAN TOTAL COBRADO: Bs. @Model.GranTotalCobrado.ToString("N2")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

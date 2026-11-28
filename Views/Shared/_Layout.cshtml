@@ -30,7 +30,8 @@
                    asp-controller="Producto" asp-action="Index">Productos</a>
                 <a class="menu-item @(controladorActual == "Venta" ? "activo" : "")"
                    asp-controller="Venta" asp-action="Create">Ventas</a>
-                <span class="menu-item deshabilitado" title="Disponible en la Actividad 10">Reportes</span>
+                <a class="menu-item @(controladorActual == "Reporte" ? "activo" : "")"
+                   asp-controller="Reporte" asp-action="Index">Reportes</a>
             </nav>
 
             <div class="usuario">Usuario: Administrador</div>
